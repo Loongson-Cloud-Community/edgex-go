@@ -5,15 +5,14 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-ARG BUILDER_BASE=golang:1.18-alpine3.16
+ARG BUILDER_BASE=cr.loongnix.cn/library/golang:1.19-alpine
 FROM ${BUILDER_BASE} AS builder
 
 WORKDIR /edgex-go
 
-RUN apk add --update --no-cache make bash git
+RUN apk add --update --no-cache make bash git gcc musl-dev
 
 COPY go.mod vendor* ./
-RUN [ ! -d "vendor" ] && go mod download all || echo "skipping..."
 
 COPY . .
 # Build the SMA executable.
@@ -23,14 +22,14 @@ RUN make cmd/sys-mgmt-agent/sys-mgmt-agent
 RUN make cmd/sys-mgmt-executor/sys-mgmt-executor
 
 # Get the Docker-in-Docker image layered-in now.
-FROM alpine:3.16
+FROM cr.loongnix.cn/library/alpine:3.11
 
 LABEL license='SPDX-License-Identifier: Apache-2.0' \
       copyright='Copyright (c) 2017-2019: Mainflux, Cavium, Dell, Copyright (c) 2021: Intel Corporation'
 
 # consul token needs to be security-bootstrappable and for security-bootstrappable, dumb-init is required
-RUN apk add --update --no-cache bash dumb-init py3-pip curl docker-cli && \
-      pip install --no-cache-dir docker-compose==1.23.2
+RUN apk add --update --no-cache bash dumb-init py3-pip curl docker-ce-cli && \
+      pip3 install --no-cache-dir docker-compose==1.23.2 -i http://pypi.douban.com/simple/ --trusted-host pypi.douban.com
 
 ENV APP_PORT=58890
 #expose system mgmt agent port

@@ -10,4 +10,6 @@
 package edgex
 
 // Global version for edgex-go
-var Version string = "to be replaced by makefile"
+// var Version string = "to be replaced by makefile"
+
+var Version string = "3.0.0"

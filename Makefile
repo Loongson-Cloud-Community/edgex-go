@@ -12,6 +12,8 @@ INCLUDE_DELAYED_START_BUILD_CORE:="false"
 # change the following boolean flag to include or exclude the delayed start libs for builds for support services exculsively
 INCLUDE_DELAYED_START_BUILD_SUPPORT:="true"
 
+PROXY?=127.0.0.1:7890
+
 GO=go
 
 DOCKERS= \
@@ -48,10 +50,11 @@ MICROSERVICES= \
 
 .PHONY: $(MICROSERVICES)
 
-VERSION=$(shell cat ./VERSION 2>/dev/null || echo 0.0.0)
+#VERSION=$(shell cat ./VERSION 2>/dev/null || echo 0.0.0)
+VERSION:=3.0.0
 DOCKER_TAG=$(VERSION)-dev
 
-GOFLAGS=-ldflags "-X github.com/edgexfoundry/edgex-go.Version=$(VERSION)" -trimpath -mod=readonly
+GOFLAGS=-ldflags "-X github.com/edgexfoundry/edgex-go.Version=$(VERSION)" -trimpath -mod=readonly -tags musl -ldflags="-extldflags --static"
 GOTESTFLAGS?=-race
 
 GIT_SHA=$(shell git rev-parse HEAD)
@@ -167,103 +170,117 @@ docker-nats:
 clean_docker_base:
 	docker rmi -f $(LOCAL_CACHE_IMAGE) $(LOCAL_CACHE_IMAGE_BASE) 
 
+#docker_base:
+#	echo "Building local cache image";\
+#	response=$(shell curl --write-out '%{http_code}' --silent --output /dev/null "$(BASE_DOCKERFILE)"); \
+#	if [ "$${response}" = "200" ]; then \
+#		echo "Found base Dockerfile"; \
+#		curl -s "$(BASE_DOCKERFILE)" | docker build -t $(LOCAL_CACHE_IMAGE_BASE) -f - .; \
+#		echo -e "FROM $(LOCAL_CACHE_IMAGE_BASE)\nWORKDIR /edgex-go\nCOPY go.mod .\nRUN go mod download" | docker build -t $(LOCAL_CACHE_IMAGE) -f - .; \
+#	else \
+#		echo "No base Dockerfile found. Using golang:$(GO_VERSION)-alpine"; \
+#		echo "FROM golang:$(GO_VERSION)-alpine\nRUN apk add --update make git\nWORKDIR /edgex-go\nCOPY go.mod .\nRUN go mod download" | docker build -t $(LOCAL_CACHE_IMAGE) -f - .; \
+#	fi
+
+# 将dockerfile添加到本地
 docker_base:
 	echo "Building local cache image";\
-	response=$(shell curl --write-out '%{http_code}' --silent --output /dev/null "$(BASE_DOCKERFILE)"); \
-	if [ "$${response}" = "200" ]; then \
-		echo "Found base Dockerfile"; \
-		curl -s "$(BASE_DOCKERFILE)" | docker build -t $(LOCAL_CACHE_IMAGE_BASE) -f - .; \
-		echo "FROM $(LOCAL_CACHE_IMAGE_BASE)\nWORKDIR /edgex-go\nCOPY go.mod .\nRUN go mod download" | docker build -t $(LOCAL_CACHE_IMAGE) -f - .; \
-	else \
-		echo "No base Dockerfile found. Using golang:$(GO_VERSION)-alpine"; \
-		echo "FROM golang:$(GO_VERSION)-alpine\nRUN apk add --update make git\nWORKDIR /edgex-go\nCOPY go.mod .\nRUN go mod download" | docker build -t $(LOCAL_CACHE_IMAGE) -f - .; \
-	fi
+	cat loong64_docker/Dockerfile | docker build -t $(LOCAL_CACHE_IMAGE_BASE) -f - .; \
+	echo -e "FROM $(LOCAL_CACHE_IMAGE_BASE)\nWORKDIR /edgex-go\nCOPY go.mod .\nRUN go mod download" | docker build -t $(LOCAL_CACHE_IMAGE) -f - .; \
+
 
 dcore: dmetadata ddata dcommand
 
 dmetadata: docker_core_metadata
-docker_core_metadata: docker_base
+docker_core_metadata:
 	docker build \
 		--build-arg ADD_BUILD_TAGS=$(ADD_BUILD_TAGS) \
-		--build-arg http_proxy \
-		--build-arg https_proxy \
+		--build-arg http_proxy=$(PROXY) \
+		--build-arg https_proxy=$(PROXY) \
 		--build-arg BUILDER_BASE=$(LOCAL_CACHE_IMAGE) \
 		-f cmd/core-metadata/Dockerfile \
 		--label "git_sha=$(GIT_SHA)" \
 		-t edgexfoundry/core-metadata:$(GIT_SHA) \
 		-t edgexfoundry/core-metadata:$(DOCKER_TAG) \
+		-t cr.loongnix.cn/edgexfoundry/core-metadata:$(VERSION) \
 		.
 
+# 其实不用docker_base也可以
 ddata: docker_core_data
-docker_core_data: docker_base
+docker_core_data:
 	docker build \
 		--build-arg ADD_BUILD_TAGS=$(ADD_BUILD_TAGS) \
-		--build-arg http_proxy \
-		--build-arg https_proxy \
+		--build-arg http_proxy=$(PROXY) \
+		--build-arg https_proxy=$(PROXY) \
 		--build-arg BUILDER_BASE=$(LOCAL_CACHE_IMAGE) \
 		-f cmd/core-data/Dockerfile \
 		--label "git_sha=$(GIT_SHA)" \
 		-t edgexfoundry/core-data:$(GIT_SHA) \
 		-t edgexfoundry/core-data:$(DOCKER_TAG) \
+		-t cr.loongnix.cn/edgexfoundry/core-data:$(VERSION) \
 		.
 
 dcommand: docker_core_command
-docker_core_command: docker_base
+docker_core_command: 
 	docker build \
 		--build-arg ADD_BUILD_TAGS=$(ADD_BUILD_TAGS) \
-		--build-arg http_proxy \
-		--build-arg https_proxy \
+		--build-arg http_proxy=$(PROXY) \
+		--build-arg https_proxy=$(PROXY) \
 		--build-arg BUILDER_BASE=$(LOCAL_CACHE_IMAGE) \
 		-f cmd/core-command/Dockerfile \
 		--label "git_sha=$(GIT_SHA)" \
 		-t edgexfoundry/core-command:$(GIT_SHA) \
 		-t edgexfoundry/core-command:$(DOCKER_TAG) \
+		-t cr.loongnix.cn/edgexfoundry/core-command:$(VERSION) \
 		.
 
 dsupport: dnotifications dscheduler
 
 dnotifications: docker_support_notifications
-docker_support_notifications: docker_base
+docker_support_notifications:
 	docker build \
 		--build-arg ADD_BUILD_TAGS=$(ADD_BUILD_TAGS) \
-		--build-arg http_proxy \
-		--build-arg https_proxy \
+		--build-arg http_proxy=$(PROXY) \
+		--build-arg https_proxy=$(PROXY) \
 		--build-arg BUILDER_BASE=$(LOCAL_CACHE_IMAGE) \
 		-f cmd/support-notifications/Dockerfile \
 		--label "git_sha=$(GIT_SHA)" \
 		-t edgexfoundry/support-notifications:$(GIT_SHA) \
 		-t edgexfoundry/support-notifications:$(DOCKER_TAG) \
+		-t cr.loongnix.cn/edgexfoundry/support-notifications:$(VERSION) \
 		.
 
 dscheduler: docker_support_scheduler
-docker_support_scheduler: docker_base
+docker_support_scheduler: 
 	docker build \
 		--build-arg ADD_BUILD_TAGS=$(ADD_BUILD_TAGS) \
-		--build-arg http_proxy \
-		--build-arg https_proxy \
+		--build-arg http_proxy=$(PROXY) \
+		--build-arg https_proxy=$(PROXY) \
 		--build-arg BUILDER_BASE=$(LOCAL_CACHE_IMAGE) \
 		-f cmd/support-scheduler/Dockerfile \
 		--label "git_sha=$(GIT_SHA)" \
 		-t edgexfoundry/support-scheduler:$(GIT_SHA) \
 		-t edgexfoundry/support-scheduler:$(DOCKER_TAG) \
+		-t cr.loongnix.cn/edgexfoundry/support-scheduler:$(VERSION) \
 		.
 
-docker_sys_mgmt_agent: docker_base
+docker_sys_mgmt_agent:
 	docker build \
-		--build-arg http_proxy \
-		--build-arg https_proxy \
+		--build-arg http_proxy=$(PROXY) \
+		--build-arg https_proxy=$(PROXY) \
 		--build-arg BUILDER_BASE=$(LOCAL_CACHE_IMAGE) \
 		-f cmd/sys-mgmt-agent/Dockerfile \
 		--label "git_sha=$(GIT_SHA)" \
 		-t edgexfoundry/sys-mgmt-agent:$(GIT_SHA) \
 		-t edgexfoundry/sys-mgmt-agent:$(DOCKER_TAG) \
+		-t cr.loongnix.cn/edgexfoundry/sys-mgmt-agent:$(VERSION) \
 		.
 
 dproxy: docker_security_proxy_setup
 docker_security_proxy_setup: docker_base
 	docker build \
-		--build-arg http_proxy \
-		--build-arg https_proxy \
+		--build-arg http_proxy=$(PROXY) \
+		--build-arg https_proxy=$(PROXY) \
 		--build-arg BUILDER_BASE=$(LOCAL_CACHE_IMAGE) \
 		-f cmd/security-proxy-setup/Dockerfile \
 		--label "git_sha=$(GIT_SHA)" \

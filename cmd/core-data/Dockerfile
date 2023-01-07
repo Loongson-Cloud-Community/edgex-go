@@ -17,23 +17,29 @@
 #  ----------------------------------------------------------------------------------
 
 # Docker image for Golang Core Data micro service
-ARG BUILDER_BASE=golang:1.18-alpine3.16
+ARG BUILDER_BASE=cr.loongnix.cn/library/golang:1.19-alpine
 FROM ${BUILDER_BASE} AS builder
 
 ARG ADD_BUILD_TAGS=""
 
 WORKDIR /edgex-go
 
-RUN apk add --update --no-cache make git
+RUN apk add --update --no-cache make git gcc musl-dev
+
+ENV http_proxy=http://10.130.0.16:7890
+ENV https_proxy=http://10.130.0.16:7890
+
 
 COPY go.mod vendor* ./
-RUN [ ! -d "vendor" ] && go mod download all || echo "skipping..."
+RUN go mod download all
+# COPY go.mod vendor* ./
+# RUN [ ! -d "vendor" ] && go mod download all || echo "skipping..."
 
 COPY . .
 RUN make -e ADD_BUILD_TAGS=$ADD_BUILD_TAGS cmd/core-data/core-data
 
 #Next image - Copy built Go binary into new workspace
-FROM alpine:3.16
+FROM cr.loongnix.cn/library/alpine:3.11
 
 LABEL license='SPDX-License-Identifier: Apache-2.0' \
       copyright='Copyright (c) 2018: Dell, Cavium'

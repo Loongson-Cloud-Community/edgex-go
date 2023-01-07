@@ -16,22 +16,21 @@
 # 
 #  ----------------------------------------------------------------------------------
 
-ARG BUILDER_BASE=golang:1.18-alpine3.16
+ARG BUILDER_BASE=cr.loongnix.cn/library/golang:1.19-alpine
 FROM ${BUILDER_BASE} AS builder
 
 ARG ADD_BUILD_TAGS=""
 
 WORKDIR /edgex-go
 
-RUN apk add --update --no-cache make git
+RUN apk add --update --no-cache make git gcc musl-dev
 
 COPY go.mod vendor* ./
-RUN [ ! -d "vendor" ] && go mod download all || echo "skipping..."
 
 COPY . .
 RUN make cmd/support-scheduler/support-scheduler
 
-FROM alpine:3.16
+FROM cr.loongnix.cn/library/alpine:3.11
 
 RUN apk add --update --no-cache dumb-init
 
